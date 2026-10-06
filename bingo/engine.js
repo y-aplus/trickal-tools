@@ -28,7 +28,9 @@
         rowBonus: new Array(SIZE).fill(3),
         colBonus: new Array(SIZE).fill(3),
         diagBonus: [7, 7], // 左上→右下, 右上→左下
-        pieceWeights: [1, 1, 1, 1, 1],
+        // フリップの出現比率 (SHAPES の順: 縦 / 横 / 正方形 / 十字 / X字)。公式の発表はない。
+        // 韓国コミュニティの推測値 (arca.live 2026-01-01「대략 30%, 30%, 15%, 15%, 10%」) を採用。
+        pieceWeights: [15, 15, 10, 30, 30],
         roundReward: 20, // ラウンド報酬 (達成率 100% で 1 回だけ得る。マス 1 個の平均報酬を 1 とした換算)
         clearTarget: 65, // 達成率 100% とみなす素点 (マス 1 / 縦横 3 / 斜め 7 換算)
         clearBonus: 0, // >0 で「早くクリアするほど得」を評価に加える (達成優先モード)
