@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トリッカル装備設計図 最適周回計算ツール</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="container">
+            <h1>トリッカル装備設計図 最適周回計算ツール</h1>
+            <p class="subtitle"></p>
+        </div>
+    </header>
+
+    <main class="container main-layout">
+        <!-- 左カラム：設定と使徒管理 -->
+        <section class="left-column">
+            <!-- 使徒追加・管理カード -->
+            <div class="card step-one">
+                <h2>1. 育成する使徒の追加</h2>
+                <div class="add-apostle-form">
+                    <div class="form-group">
+                        <label for="apostle-select">使徒を選択</label>
+                        <div class="suggest-container">
+                            <input type="text" id="apostle-select" placeholder="使徒の名前を入力または選択 (ひらがな/ローマ字可)..." autocomplete="off">
+                            <div id="apostle-suggest-list" class="suggest-list hidden"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="text-align: right; margin-top: 12px;">
+                        <button id="add-apostle-btn" class="btn primary">育成リストに追加する</button>
+                    </div>
+                </div>
+
+                <div class="apostles-list-container">
+                    <h3>育成リスト</h3>
+                    <div id="active-apostles-list" class="active-apostles-list">
+                        <!-- 動的に追加された使徒カードがここに入ります -->
+                        <p class="empty-message">育成する使徒を追加してください。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ステージクリア状況・設定カード -->
+            <div class="card step-two">
+                <h2>2. ステージクリア状況・ドロップ設定</h2>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label>最大クリアステージ</label>
+                        <div class="row-group">
+                            <div class="half-group">
+                                <input type="number" id="max-area-input" value="28" min="1" max="30" placeholder="エリア (M)">
+                            </div>
+                            <div class="half-group" style="display: flex; align-items: center; gap: 8px;">
+                                <span>−</span>
+                                <input type="number" id="max-stage-input" value="8" min="1" max="12" placeholder="ステージ (N)">
+                            </div>
+                        </div>
+                        <span class="help-text">例: ステージ 28-4 までクリアしている場合は「28」と「4」を入力</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button class="accordion-toggle" type="button" id="toggle-advanced-settings">
+                            高度な設定（ドロップ期待値） ▼
+                        </button>
+                        <div id="advanced-settings-panel" class="advanced-panel hidden">
+                            <div class="form-group row-group">
+                                <div class="half-group">
+                                    <label for="rate-main-input">メイン期待値/周 (10キャンディ)</label>
+                                    <input type="number" id="rate-main-input" value="1.0" step="0.1" min="0.1">
+                                </div>
+                                <div class="half-group">
+                                    <label for="rate-sub-input">サブ期待値/周 (10キャンディ)</label>
+                                    <input type="number" id="rate-sub-input" value="1.0" step="0.1" min="0.1">
+                                </div>
+                            </div>
+                            <span class="help-text">※デフォルトは1周(10キャンディ)あたりメイン1.0枚、サブ1.0枚(合計期待値2.0枚)のWiki計算値。</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 右カラム：所持素材と計算結果 -->
+        <section class="right-column">
+            <!-- 所持素材入力カード -->
+            <div class="card step-three">
+                <h2>3. 現在の所持素材（設計図・欠片）</h2>
+                <p class="section-desc">持っている設計図または欠片の所持数を入力してください（未入力は0枚として計算）。</p>
+                
+                <div id="material-inputs-container">
+                    <div class="material-grid" id="dynamic-material-grid">
+                        <!-- 必要な素材入力欄が動的に挿入されます -->
+                    </div>
+                    <p class="empty-message" id="material-empty-message">育成リストに使徒を追加すると、必要な所持素材の入力欄がここに自動生成されます。</p>
+                </div>
+            </div>
+
+            <!-- 計算ボタンと結果表示カード -->
+            <div class="action-area">
+                <button id="calculate-btn" class="btn primary large-btn">最適な周回ステージを計算する</button>
+            </div>
+
+            <div id="results-card" class="card hidden">
+                <h2>計算結果</h2>
+                
+                <div class="results-summary">
+                    <div class="summary-item summary-primary">
+                        <span class="label">総消費キャンディ</span>
+                        <span class="value" id="res-total-candy">0</span>
+                    </div>
+                    <div class="summary-item summary-secondary" id="no-limit-summary">
+                        <span class="label">参考: ステージ制限なし</span>
+                        <span class="value" id="res-total-candy-nolimit">0</span>
+                    </div>
+                </div>
+
+                <div class="results-section">
+                    <h3>周回すべきステージ</h3>
+                    <div class="table-wrapper">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>ステージ</th>
+                                    <th>消費キャンディ</th>
+                                    <th>主なドロップ素材 (期待獲得数)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="res-stages-tbody">
+                                <!-- 動的に結果が挿入されます -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="unreachable-section" class="results-section hidden">
+                    <h3 class="warning-title">⚠️ 解放エリア制限により集められない素材</h3>
+                    <p class="warning-desc">以下の素材は、現在の最大クリアエリア以下のステージではドロップしません。</p>
+                    <ul id="res-unreachable-list" class="unreachable-list">
+                        <!-- 動的に警告が挿入されます -->
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <div class="container">
+        </div>
+    </footer>
+
+    <script src="vendor/highs/highs.wasm.js"></script>
+    <script src="vendor/highs/highs.js"></script>
+    <script src="optimizer.js"></script>
+    <script src="state.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

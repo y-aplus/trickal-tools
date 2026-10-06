@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ビンゴ支援ツール</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="top">
+        <h1>ビンゴ支援ツール</h1>
+        <a class="back" href="../index.html">装備ツールへ</a>
+    </header>
+
+    <main>
+        <section class="card status">
+            <div class="meter"><div id="meter-bar"></div></div>
+            <div class="status-row">
+                <span>達成率 <b id="progress">0%</b></span>
+                <span>埋まり <b id="filled">0</b>/49</span>
+                <span>BINGO <b id="bingos">0</b>/16</span>
+                <span>手数 <b id="moves">0</b></span>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>いまのフリップ <small>(2枚)</small></h2>
+            <div id="pick-cur" class="picker"></div>
+            <div id="pick-held" class="picker"></div>
+        </section>
+
+        <section class="card">
+            <h2>盤面 <small>(タップで埋まり/空きを修正)</small></h2>
+            <div id="board" class="board"></div>
+            <div class="legend">
+                <span class="lg new"></span>新しく埋まる
+                <span class="lg dup"></span>被り(無駄)
+            </div>
+            <details id="alts-box" class="alts-box" hidden>
+                <summary>ほかの候補</summary>
+                <div id="alts" class="alts"></div>
+            </details>
+            <div class="actions"><button id="btn-calc" class="primary" hidden>計算する</button></div>
+            <div class="picker-label">開けた大物マス</div>
+            <div id="big-cells" class="big-cells"></div>
+            <div id="big-note" class="note"></div>
+        </section>
+
+        <section id="reset-card" class="card" hidden>
+            <h2>続行 or 次のラウンド</h2>
+            <div id="reset-advice" class="result">計算中…</div>
+        </section>
+
+        <section class="card">
+            <details>
+                <summary>報酬の価値設定</summary>
+                <p class="note">アイテム 1 個の価値を、共通の単位(ゴールド換算など)で入力します。マス報酬の個数は、1 枚の盤面の合計(Wiki「イードの永遠の夢路」の一覧)です。0 を入れると、そのアイテムは価値なしとして計算します。空欄にすると初期値に戻ります。ラウンド報酬はキャンディ 100 個で固定です。</p>
+                <table id="value-table" class="value-table"></table>
+                <div id="value-summary" class="note"></div>
+                <label>先読み手数 <select id="cfg-depth"><option value="1">1 (最速)</option><option value="2">2</option><option value="3">3 (遅い)</option></select></label>
+                <button id="cfg-default">初期値に戻す</button>
+            </details>
+        </section>
+    </main>
+
+    <!-- おすすめと操作ボタンは、スクロールしても画面下に出しておく -->
+    <div class="dock">
+        <div id="result" class="result">フリップを選んでください。</div>
+        <div id="dock-verdict" class="verdict" hidden></div>
+        <div class="actions">
+            <button id="btn-apply" class="primary" disabled>この手を置いた</button>
+            <button id="btn-undo">1手戻す</button>
+            <button id="btn-reset" hidden>次のラウンドへ</button>
+        </div>
+    </div>
+
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
