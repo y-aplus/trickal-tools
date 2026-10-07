@@ -164,3 +164,7 @@ input, select { width: 90px; padding: 6px; font: inherit; }
 .big-cells { display: flex; gap: 16px; flex-wrap: wrap; }
 .big-cells label { justify-content: flex-start; gap: 6px; margin-top: 0; }
 .big-cells input { width: 20px; height: 20px; padding: 0; }
+
+.big-counter { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.big-counter button { width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); font-size: 1.1rem; }
+.big-counter button:disabled { opacity: 0.4; }

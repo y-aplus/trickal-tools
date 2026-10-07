@@ -15,7 +15,7 @@
     let cur = -1;
     let held = -1;
     let moves = 0;
-    let found = {}; // 開けた大物マス (E.BIG_CELLS の key → true)
+    let found = {}; // 開けた大物マスの数 (E.BIG_CELLS の key → 個数)
     let editing = false; // 盤面をタップで修正中 (「計算する」を押すまで計算しない)
     let history = [];
     let settings = defaultSettings();
@@ -26,6 +26,20 @@
     let pending = false;
 
     const $ = id => document.getElementById(id);
+
+    // 保存データの大物マスを個数に直す (古い形式: true / gold100k_1〜3 / gold250k)
+    function normalizeFound(raw) {
+        const out = {};
+        if (!raw || typeof raw !== "object") return out;
+        E.BIG_CELLS.forEach(big => {
+            let n = E.foundCountOf(raw, big);
+            if (big.key === "gold100k") {
+                n = Math.max(n, [1, 2, 3].filter(i => raw["gold100k_" + i]).length);
+            }
+            if (n > 0) out[big.key] = Math.min(big.count, n);
+        });
+        return out;
+    }
 
     function save() {
         try {
@@ -41,7 +55,7 @@
             if (Number.isInteger(data.cur)) cur = data.cur;
             if (Number.isInteger(data.held)) held = data.held;
             if (Number.isInteger(data.moves)) moves = data.moves;
-            if (data.found && typeof data.found === "object") found = data.found;
+            found = normalizeFound(data.found);
             if (Array.isArray(data.history)) history = data.history;
             if (data.settings) {
                 const base = defaultSettings();
@@ -187,21 +201,46 @@
     function renderBig() {
         const box = $("big-cells");
         box.innerHTML = "";
+        const setFound = (big, n) => {
+            const v = Math.min(big.count, Math.max(0, n));
+            if (v > 0) found[big.key] = v;
+            else delete found[big.key];
+            save();
+            renderBig();
+            recompute();
+        };
         E.BIG_CELLS.forEach(big => {
-            const label = document.createElement("label");
-            const check = document.createElement("input");
-            check.type = "checkbox";
-            check.checked = !!found[big.key];
-            check.onchange = () => {
-                if (check.checked) found[big.key] = true;
-                else delete found[big.key];
-                save();
-                renderBig();
-                recompute();
-            };
-            label.appendChild(check);
-            label.appendChild(document.createTextNode(big.label));
-            box.appendChild(label);
+            const n = E.foundCountOf(found, big);
+            if (big.count === 1) {
+                const label = document.createElement("label");
+                const check = document.createElement("input");
+                check.type = "checkbox";
+                check.checked = n > 0;
+                check.onchange = () => setFound(big, check.checked ? 1 : 0);
+                label.appendChild(check);
+                label.appendChild(document.createTextNode(big.label));
+                box.appendChild(label);
+                return;
+            }
+            // 同じ中身のマスが複数ある大物は、開けた数を数える
+            const row = document.createElement("div");
+            row.className = "big-counter";
+            const minus = document.createElement("button");
+            minus.type = "button";
+            minus.textContent = "−";
+            minus.setAttribute("aria-label", `${big.label}を1つ減らす`);
+            minus.disabled = n <= 0;
+            minus.onclick = () => setFound(big, n - 1);
+            const plus = document.createElement("button");
+            plus.type = "button";
+            plus.textContent = "+";
+            plus.setAttribute("aria-label", `${big.label}を1つ増やす`);
+            plus.disabled = n >= big.count;
+            plus.onclick = () => setFound(big, n + 1);
+            const text = document.createElement("span");
+            text.textContent = `${big.label} を開けた数 ${n} / ${big.count}`;
+            row.append(minus, plus, text);
+            box.appendChild(row);
         });
         const { rewards, usable } = derived();
         $("big-note").textContent = usable
@@ -360,7 +399,7 @@
         cur = prev.cur;
         held = prev.held;
         moves = prev.moves;
-        found = prev.found || {};
+        found = normalizeFound(prev.found);
         save();
         render();
         recompute();

@@ -39,8 +39,10 @@
         beam: 4
     };
 
-    // 報酬アイテムと、1 枚の盤面に含まれる個数 (Wiki「ビンゴイベント」イードの永遠の夢路の一覧。
-    // 中身は各盤面で共通、場所だけランダム)。
+    // 報酬アイテムと、1 枚の盤面に含まれる個数。中身は各盤面で共通、場所だけランダム。
+    // 出典: Wiki「ビンゴイベント」の一覧と、現在のイベント「教理のままに、行いましょう」の
+    // ボーナスラウンド盤面のスクリーンショット (2026-10-07)。ゴールドだけ Wiki と違い、
+    // 1 万 ×4 + 10 万 ×3 = 34 万だった (他のアイテムは個数も合計も Wiki と一致)。
     //   cells: 49 マスに入っている合計個数
     //   lines: 縦横 14 本のライン報酬の合計個数 (どのラインに付くかは固定でないので平均で扱う)
     //   diags: 斜め 2 本のライン報酬の合計個数
@@ -55,7 +57,7 @@
     const ELIEF_VALUE = 1667;
     const MOCARON_VALUE = 1 / 1.5;
     const ITEMS = [
-        { key: "gold", label: "ゴールド", cells: 330000, lines: 0, diags: 0, rounds: 0, value: 1 },
+        { key: "gold", label: "ゴールド", cells: 340000, lines: 0, diags: 0, rounds: 0, value: 1 },
         { key: "mocaron", label: "モカロン", cells: 105000, lines: 0, diags: 0, rounds: 0, value: MOCARON_VALUE },
         // モカロンのマス 7 個 (合計 105,000) と、シューカロンのマス 6 個 (合計 13,500) の 1 マスあたりの価値を揃える
         { key: "shucaron", label: "シューカロン", cells: 13500, lines: 0, diags: 0, rounds: 0, value: MOCARON_VALUE * (105000 / 7) / (13500 / 6) },
@@ -103,13 +105,22 @@
         };
     }
 
-    // 価値が飛び抜けている 2 マス。開けたかどうかで、残りのマスの期待値が大きく変わる。
+    // 価値が飛び抜けているマス (教団証 10 個と、ゴールド 10 万の 3 マス)。開けたかどうかで、
+    // 残りのマスの期待値が大きく変わる。count は同じ中身のマスの数 (中身が同じなので個数だけ数える)。
     const BIG_CELLS = [
-        { key: "kyodansho10", label: "教団証 10 個", item: "kyodansho", amount: 10 },
-        { key: "gold250k", label: "ゴールド 250,000", item: "gold", amount: 250000 }
+        { key: "kyodansho10", label: "教団証 10 個", item: "kyodansho", amount: 10, count: 1 },
+        { key: "gold100k", label: "ゴールド 100,000", item: "gold", amount: 100000, count: 3 }
     ];
+    const BIG_CELL_TOTAL = BIG_CELLS.reduce((sum, big) => sum + big.count, 0);
 
-    // まだ開いていないマス 1 個の期待値。found[key] が true の大物マスは開いた (中身を得た) とみなす。
+    // 開けた大物マスの数 (0〜count)。true は 1 個 (古い保存データ)、未定義は 0。
+    function foundCountOf(found, big) {
+        const raw = found ? found[big.key] : 0;
+        const n = raw === true ? 1 : Number(raw);
+        return Number.isFinite(n) ? Math.min(big.count, Math.max(0, Math.floor(n))) : 0;
+    }
+
+    // まだ開いていないマス 1 個の期待値。found[key] 個の大物マスは開いた (中身を得た) とみなす。
     // 大物以外のマスは中身を区別せず、開いたマスにはその平均が入っていたとして扱う。
     function unopenedCellValue(values, opened, found) {
         const total = deriveRewards(values).cellValue * CELLS;
@@ -121,13 +132,12 @@
         for (const big of BIG_CELLS) {
             const v = Number(values && values[big.item]);
             const value = (Number.isFinite(v) && v > 0 ? v : 0) * big.amount;
-            bigTotal += value;
-            if (found && found[big.key]) {
-                bigFound += value;
-                foundCount++;
-            }
+            const n = foundCountOf(found, big);
+            bigTotal += value * big.count;
+            bigFound += value * n;
+            foundCount += n;
         }
-        const restAverage = (total - bigTotal) / (CELLS - BIG_CELLS.length);
+        const restAverage = (total - bigTotal) / (CELLS - BIG_CELL_TOTAL);
         const openedRest = Math.max(0, opened - foundCount);
         return Math.max(0, (total - bigFound - openedRest * restAverage) / remaining);
     }
@@ -486,7 +496,7 @@
     }
 
     return {
-        SIZE, CELLS, SHAPES, LINES, PLACEMENTS, DEFAULT_CONFIG, ITEMS, BIG_CELLS, deriveRewards, unopenedCellValue,
+        SIZE, CELLS, SHAPES, LINES, PLACEMENTS, DEFAULT_CONFIG, ITEMS, BIG_CELLS, foundCountOf, deriveRewards, unopenedCellValue,
         boardFromArray, cellMaskToArray, isFilled, rawScore, countBingos, popcount,
         generateMoves, suggest, applyMove, makeEvaluator, estimateFreshRate, adviseReset
     };
