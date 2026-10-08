@@ -113,10 +113,9 @@
     ];
     const BIG_CELL_TOTAL = BIG_CELLS.reduce((sum, big) => sum + big.count, 0);
 
-    // 開けた大物マスの数 (0〜count)。true は 1 個 (古い保存データ)、未定義は 0。
+    // 開けた大物マスの数 (0〜count)。未定義は 0。
     function foundCountOf(found, big) {
-        const raw = found ? found[big.key] : 0;
-        const n = raw === true ? 1 : Number(raw);
+        const n = Number(found ? found[big.key] : 0);
         return Number.isFinite(n) ? Math.min(big.count, Math.max(0, Math.floor(n))) : 0;
     }
 
@@ -351,7 +350,12 @@
             m.gain = rawScore(m.lo, m.hi) - rawScore(lo, hi);
             m.rewardGain = evaluate(m.lo, m.hi) - base;
         }
-        moves.sort((a, b) => b.value - a.value);
+        // 先読みの価値が同点なら、その手で得られる報酬が大きい方を上にする
+        // (同点の手が並ぶと、報酬が後回しになる手が最善に見えてしまう)
+        moves.sort((a, b) => {
+            const tolerance = 1e-6 * Math.max(1, Math.abs(a.value), Math.abs(b.value));
+            return Math.abs(a.value - b.value) > tolerance ? b.value - a.value : b.rewardGain - a.rewardGain;
+        });
         return { moves, nodes };
     }
 

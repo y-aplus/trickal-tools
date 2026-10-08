@@ -27,20 +27,6 @@
 
     const $ = id => document.getElementById(id);
 
-    // 保存データの大物マスを個数に直す (古い形式: true / gold100k_1〜3 / gold250k)
-    function normalizeFound(raw) {
-        const out = {};
-        if (!raw || typeof raw !== "object") return out;
-        E.BIG_CELLS.forEach(big => {
-            let n = E.foundCountOf(raw, big);
-            if (big.key === "gold100k") {
-                n = Math.max(n, [1, 2, 3].filter(i => raw["gold100k_" + i]).length);
-            }
-            if (n > 0) out[big.key] = Math.min(big.count, n);
-        });
-        return out;
-    }
-
     function save() {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ filled, cur, held, moves, found, history, settings }));
@@ -55,7 +41,7 @@
             if (Number.isInteger(data.cur)) cur = data.cur;
             if (Number.isInteger(data.held)) held = data.held;
             if (Number.isInteger(data.moves)) moves = data.moves;
-            found = normalizeFound(data.found);
+            if (data.found && typeof data.found === "object") found = data.found;
             if (Array.isArray(data.history)) history = data.history;
             if (data.settings) {
                 const base = defaultSettings();
@@ -275,16 +261,17 @@
             result.textContent = editing ? "盤面の修正が終わったら「計算する」を押してください。" : "計算中…";
             return;
         }
-        const best = suggestions[0];
         const move = suggestions[selected];
-        result.innerHTML = `<b>${describe(move)}</b><br>期待報酬 +${fmtK(move.value)}(${settings.depth}手先まで)`
-            + (selected === 0 ? "(最善)" : `(最善より −${fmtK(best.value - move.value)})`);
+        // 表示するのは、この手で得られる報酬 (新しく埋まるマス + 完成するライン + ラウンド報酬)。
+        // 並び順と「最善」は、次の手以降まで先読みした期待値で決めている。
+        result.innerHTML = `<b>${describe(move)}</b><br>この手で +${fmtK(move.rewardGain)}`
+            + (selected === 0 ? "(最善)" : "");
         $("alts-box").hidden = suggestions.length < 2;
         suggestions.slice(0, 5).forEach((m, i) => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "alt" + (i === selected ? " sel" : "");
-            btn.textContent = `${i + 1}. ${describe(m)}  [+${fmtK(m.value)}]`;
+            btn.textContent = `${i + 1}. ${describe(m)}  [+${fmtK(m.rewardGain)}]`;
             btn.onclick = () => {
                 selected = i;
                 renderBoard();
@@ -399,7 +386,7 @@
         cur = prev.cur;
         held = prev.held;
         moves = prev.moves;
-        found = normalizeFound(prev.found);
+        found = prev.found || {};
         save();
         render();
         recompute();
