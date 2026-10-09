@@ -78,9 +78,26 @@
     const ROW_COL_LINES = 14;
     const DIAG_LINES = 2;
 
+    // ライン報酬の配置 (盤面の右端と下端)。縦と横の 1〜7 番目 (上から / 左から) の順。
+    // 2 つの盤面のスクリーンショットで、右端も下端も同じ並びだったので、固定として扱う。
+    // 4 番目 (中央の行と列) だけが教団証で、価値が飛び抜けている。斜めはどちらもエリーフ ×50。
+    const LINE_LAYOUT = {
+        rowCol: [
+            { item: "elief", amount: 10 },
+            { item: "starCandy", amount: 10 },
+            { item: "elief", amount: 10 },
+            { item: "kyodansho", amount: 5 },
+            { item: "elief", amount: 10 },
+            { item: "starCandy", amount: 10 },
+            { item: "elief", amount: 10 }
+        ],
+        diag: { item: "elief", amount: 50 }
+    };
+
     // アイテムごとの価値 (values[key]、未入力は 0 扱い) から、探索に渡す報酬量を求める。
     // cellValue = マス 1 個の平均、lineValue = 縦横ライン 1 本の平均、diagValue = 斜め 1 本の平均、
-    // roundValue = ラウンド報酬 1 回分。
+    // roundValue = ラウンド報酬 1 回分。rowValues / colValues / diagValues はラインごとの価値
+    // (LINE_LAYOUT の並びで、行・列の 7 本ずつと斜め 2 本)。
     function deriveRewards(values) {
         let cellTotal = 0;
         let lineTotal = 0;
@@ -96,11 +113,20 @@
             diagTotal += item.diags * value;
             roundTotal += item.rounds * value;
         }
+        const valueOf = key => {
+            const v = Number(values && values[key]);
+            return Number.isFinite(v) && v > 0 ? v : 0;
+        };
+        const rowCol = LINE_LAYOUT.rowCol.map(line => line.amount * valueOf(line.item));
+        const diag = LINE_LAYOUT.diag.amount * valueOf(LINE_LAYOUT.diag.item);
         return {
             cellValue: cellTotal / CELLS,
             lineValue: lineTotal / ROW_COL_LINES,
             diagValue: diagTotal / DIAG_LINES,
             roundValue: roundTotal,
+            rowValues: rowCol.slice(),
+            colValues: rowCol.slice(),
+            diagValues: [diag, diag],
             missing
         };
     }
@@ -500,7 +526,7 @@
     }
 
     return {
-        SIZE, CELLS, SHAPES, LINES, PLACEMENTS, DEFAULT_CONFIG, ITEMS, BIG_CELLS, foundCountOf, deriveRewards, unopenedCellValue,
+        SIZE, CELLS, SHAPES, LINES, PLACEMENTS, DEFAULT_CONFIG, ITEMS, LINE_LAYOUT, BIG_CELLS, foundCountOf, deriveRewards, unopenedCellValue,
         boardFromArray, cellMaskToArray, isFilled, rawScore, countBingos, popcount,
         generateMoves, suggest, applyMove, makeEvaluator, estimateFreshRate, adviseReset
     };

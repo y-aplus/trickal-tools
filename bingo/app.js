@@ -79,9 +79,10 @@
         const cellValue = fresh ? used.cellValue : unopenedValue();
         return {
             cellValues: new Array(E.CELLS).fill(cellValue),
-            rowBonus: new Array(E.SIZE).fill(used.lineValue),
-            colBonus: new Array(E.SIZE).fill(used.lineValue),
-            diagBonus: [used.diagValue, used.diagValue],
+            // ライン報酬は、ラインごとの価値 (中央の行と列は教団証)。仮の重みのときは一律
+            rowBonus: usable ? rewards.rowValues : new Array(E.SIZE).fill(used.lineValue),
+            colBonus: usable ? rewards.colValues : new Array(E.SIZE).fill(used.lineValue),
+            diagBonus: usable ? rewards.diagValues : [used.diagValue, used.diagValue],
             // 仮の重みで動かしている間は、換算の合わないラウンド報酬を使わない
             roundReward: usable ? rewards.roundValue : 0,
             depth: settings.depth
