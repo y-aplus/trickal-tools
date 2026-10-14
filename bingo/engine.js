@@ -33,7 +33,10 @@
         pieceWeights: [15, 15, 10, 30, 30],
         roundReward: 20, // ラウンド報酬 (達成率 100% で 1 回だけ得る。マス 1 個の平均報酬を 1 とした換算)
         clearTarget: 65, // 達成率 100% とみなす素点 (マス 1 / 縦横 3 / 斜め 7 換算)
-        clearBonus: 0, // >0 で「早くクリアするほど得」を評価に加える (達成優先モード)
+        // 1 フリップの機会費用 (基準効率 λ)。>0 のとき、先読みで「早く 100% に届くほど、早く次のラウンドへ進める」
+        // ことを評価する。toClear[素点] = その素点から 100% に届くまでの平均フリップ数 (estimateFreshRate が求める)。
+        timeCost: 0,
+        toClear: null,
         lineShaping: 0, // 未完成ラインの途中経過をどれだけ評価するか (シミュレーションでは効果なしだったので 0)
         depth: 2,
         beam: 4
@@ -331,15 +334,24 @@
         const cache = new Map();
         let nodes = 0;
 
-        function cleared(lo, hi) {
-            return config.clearBonus > 0 && rawScore(lo, hi) >= config.clearTarget;
+        // 時間の価値。先読みの終わり (残り 0 手) の時点で比べるため、100% 前の盤面は届くまでの手数 × λ を引き、
+        // 100% 後の盤面は「そこで次のラウンドへ進み、残りの手で λ ずつ得る」ことも選べるとする。
+        const timeCost = config.timeCost > 0 && config.toClear ? config.timeCost : 0;
+        const target = config.clearTarget;
+        function toClear(lo, hi) {
+            const raw = rawScore(lo, hi);
+            if (raw >= target) return 0;
+            return Math.max(1, config.toClear[raw] || 1);
+        }
+        function terminal(lo, hi) {
+            return timeCost ? evaluate(lo, hi) - timeCost * toClear(lo, hi) : evaluate(lo, hi);
         }
 
         // 手持ちが分かっている状態の価値 (残り d 手)
         function decide(lo, hi, cur, held, d) {
             nodes++;
             const moves = generateMoves(lo, hi, cur, held);
-            if (moves.length === 0) return evaluate(lo, hi);
+            if (moves.length === 0) return terminal(lo, hi);
             for (const m of moves) m.score = evaluate(m.lo, m.hi);
             moves.sort((a, b) => b.score - a.score);
             let best = -Infinity;
@@ -354,8 +366,7 @@
 
         // 次の 1 枚が未知 (確率で平均) の状態の価値 (残り d 手)
         function after(lo, hi, held, d) {
-            if (cleared(lo, hi)) return evaluate(lo, hi) + config.clearBonus * (d + 1);
-            if (d <= 0 || (popcount(lo) + popcount(hi) === CELLS)) return evaluate(lo, hi);
+            if (d <= 0 || (popcount(lo) + popcount(hi) === CELLS)) return terminal(lo, hi) + timeCost * Math.max(0, d);
             const key = lo + "," + hi + "," + held + "," + d;
             const hit = cache.get(key);
             if (hit !== undefined) return hit;
@@ -363,6 +374,8 @@
             for (let t = 0; t < SHAPES.length; t++) {
                 if (probs[t] > 0) sum += probs[t] * decide(lo, hi, t, held, d);
             }
+            // 100% 後は、ここで次のラウンドへ進んで残り d 手を λ ずつ使う方が得なら、そちらを取る
+            if (timeCost && rawScore(lo, hi) >= target) sum = Math.max(sum, evaluate(lo, hi) + timeCost * d);
             cache.set(key, sum);
             return sum;
         }
@@ -408,11 +421,13 @@
     // 先読みなしの貪欲法で h フリップ進めたときの累計報酬 (curve[h-1])。
     // 盤面が埋まる等で置けなくなったら以降は増えない。
     // reach = 素点が target に届いたときのフリップ数 (届かなければ Infinity、最初から届いていれば 0)。
+    // raws[h] = h フリップ後の素点 (100% に届くまで。100% までの残り手数の表を作るのに使う)。
     function rollout(evaluate, probs, rand, lo, hi, cur, held, flips, target) {
         const base = evaluate(lo, hi);
         const curve = new Array(flips).fill(0);
+        const raws = [rawScore(lo, hi)];
         let last = 0;
-        let reach = rawScore(lo, hi) >= target ? 0 : Infinity;
+        let reach = raws[0] >= target ? 0 : Infinity;
         // 初期化直後は手持ちもホールドも空。最初の 1 枚は必ずホールドに入り (ホールドを空のまま
         // 進める盤面はない)、次の 1 枚が手持ちになる。このやり取りはフリップを消費しない。
         if (cur < 0) cur = drawPiece(rand, probs);
@@ -436,12 +451,16 @@
                 hi = best.hi;
                 held = best.keep;
                 last = bestScore - base;
-                if (reach === Infinity && rawScore(lo, hi) >= target) reach = h + 1;
+            }
+            if (reach === Infinity) {
+                const raw = rawScore(lo, hi);
+                raws.push(raw);
+                if (raw >= target) reach = h + 1;
             }
             curve[h] = last;
             cur = drawPiece(rand, probs);
         }
-        return { curve, reach };
+        return { curve, reach, raws };
     }
 
     function normalizedProbs(config) {
@@ -449,10 +468,44 @@
         return config.pieceWeights.map(w => w / sum);
     }
 
+    // 素点ごとの、100% に届くまでの平均フリップ数 (toClear[0..target-1])。データのない素点は前後から補い、
+    // 素点が高いほど少なく (単調に) なるよう整える。100% 前は最低 1 手。
+    function buildToClear(runs, target) {
+        const sum = new Array(target).fill(0);
+        const count = new Array(target).fill(0);
+        for (const run of runs) {
+            if (run.reach === Infinity) continue;
+            for (let h = 0; h < run.reach; h++) {
+                const raw = run.raws[h];
+                if (raw < target) {
+                    sum[raw] += run.reach - h;
+                    count[raw]++;
+                }
+            }
+        }
+        const table = sum.map((s, raw) => (count[raw] ? s / count[raw] : null));
+        for (let raw = 0; raw < target; raw++) {
+            if (table[raw] !== null) continue;
+            let lower = raw - 1;
+            while (lower >= 0 && table[lower] === null) lower--;
+            let upper = raw + 1;
+            while (upper < target && table[upper] === null) upper++;
+            const highValue = upper < target ? table[upper] : 1;
+            table[raw] = lower < 0 ? highValue : table[lower] + (highValue - table[lower]) * (raw - lower) / (upper - lower);
+        }
+        for (let raw = target - 1; raw >= 0; raw--) {
+            table[raw] = Math.max(1, table[raw], raw + 1 < target ? table[raw + 1] : 1);
+        }
+        return table;
+    }
+
     // まっさらな盤面から始めて、どこで切り上げるのが最も効率的か。
     // 次のラウンドへは達成率 100% (素点 clearTarget) にならないと進めないので、
     // 「100% に届いてから、さらに extra フリップ開けて切り上げる」の中から最善の extra を選ぶ。
-    // rate = 1 フリップあたりの期待報酬 (λ*)、flips = そのときの 1 ラウンドの平均フリップ数。
+    // rate = 1 フリップあたりの期待報酬 (λ*)、flips = そのときの 1 ラウンドの平均フリップ数、
+    // toClear = 素点ごとの 100% までの平均フリップ数 (先読みで時間の価値を測るのに使う)。
+    // (大物の出方で止めどきを変えるツールの判定どおりに回して λ を測り直す方法も試したが、
+    //  λ は 3% 上がるものの判定はほとんど変わらず、1 手あたりの報酬も変わらなかったので使っていない)
     function estimateFreshRate(userConfig, options) {
         const config = Object.assign({}, DEFAULT_CONFIG, userConfig);
         const opts = Object.assign({ sims: 400, maxFlips: 24, seed: 12345 }, options);
@@ -480,7 +533,7 @@
                 extra = k;
             }
         }
-        return { rate, flips, extra };
+        return { rate, flips, extra, toClear: buildToClear(runs, config.clearTarget) };
     }
 
     // 続行 vs 初期化。value = max_h (h フリップ後の期待累計報酬 − λ*·h)。

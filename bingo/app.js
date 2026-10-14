@@ -355,8 +355,9 @@
         // Worker が使えない環境ではメインスレッドで計算する
         setTimeout(() => {
             try {
-                const result = E.suggest(payload.state, payload.config);
                 const fresh = E.estimateFreshRate(payload.freshConfig);
+                const timed = Object.assign({}, payload.config, { timeCost: fresh.rate, toClear: fresh.toClear });
+                const result = E.suggest(payload.state, timed);
                 const reset = E.adviseReset(payload.state, payload.config, fresh);
                 handleResponse({ id: payload.id, moves: result.moves.slice(0, 6), fresh, reset });
             } catch (error) {

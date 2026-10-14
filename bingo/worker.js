@@ -14,8 +14,10 @@ function freshRate(config) {
 self.onmessage = function (event) {
     const { id, state, config, freshConfig } = event.data;
     try {
-        const result = BingoEngine.suggest(state, config);
         const fresh = freshRate(freshConfig || config);
+        // 先読みで「早く 100% に届くほど早く次のラウンドへ進める」ことを評価するため、基準効率を渡す
+        const timed = Object.assign({}, config, { timeCost: fresh.rate, toClear: fresh.toClear });
+        const result = BingoEngine.suggest(state, timed);
         const reset = BingoEngine.adviseReset(state, config, fresh);
         self.postMessage({ id, moves: result.moves.slice(0, 6), nodes: result.nodes, fresh, reset });
     } catch (error) {
